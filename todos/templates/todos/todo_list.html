@@ -1,0 +1,364 @@
+{% extends 'todos/base.html' %}
+{% block title %}My Tasks{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Stats Row ─────────────────────────────────────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: var(--transition);
+}
+.stat-card:hover { background: var(--surface-hover); transform: translateY(-2px); }
+.stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase;
+              letter-spacing: 0.8px; color: var(--text-muted); }
+.stat-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.stat-total   .stat-value { color: var(--accent-2); }
+.stat-pending .stat-value { color: var(--warning); }
+.stat-done    .stat-value { color: var(--success); }
+
+/* ── Progress Bar ──────────────────────────────────── */
+.progress-wrap {
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.progress-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.progress-label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.progress-pct   { font-size: 13px; font-weight: 700; color: var(--accent-2); }
+.progress-track {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── Toolbar: Search + Priority ────────────────────── */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-wrap {
+  flex: 1;
+  min-width: 180px;
+  position: relative;
+}
+.search-wrap i {
+  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 14px; pointer-events: none;
+}
+.search-wrap input {
+  padding-left: 38px !important;
+}
+.priority-select {
+  min-width: 140px;
+}
+
+/* ── Filter Tabs ───────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: var(--transition);
+}
+.tab:hover { color: var(--text); background: var(--surface-hover); }
+.tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.tab-count {
+  background: rgba(255,255,255,0.2);
+  border-radius: 99px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.tab:not(.active) .tab-count {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-muted);
+}
+
+/* ── Todo Items ────────────────────────────────────── */
+.todo-list { display: flex; flex-direction: column; gap: 10px; }
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: var(--transition);
+  animation: slideIn 0.3s ease both;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.todo-item:hover {
+  background: var(--surface-hover);
+  border-color: rgba(124,111,247,0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+}
+.todo-item.is-done {
+  opacity: 0.55;
+  border-color: rgba(16,185,129,0.2);
+}
+.todo-item.is-done:hover { opacity: 0.75; }
+
+/* Toggle checkbox */
+.toggle-form { display: contents; }
+.toggle-btn {
+  width: 22px; height: 22px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+  color: transparent;
+  font-size: 11px;
+}
+.toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+.is-done .toggle-btn {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+/* Content */
+.todo-content { flex: 1; min-width: 0; }
+.todo-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-done .todo-title {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.todo-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.due-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.due-date.overdue { color: var(--danger); }
+
+/* Actions */
+.todo-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ── Empty State ───────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--text-muted);
+}
+.empty-icon {
+  font-size: 52px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+.empty-state h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+.empty-state p  { font-size: 14px; margin-bottom: 20px; }
+
+@media (max-width: 520px) {
+  .stats-row { grid-template-columns: repeat(3,1fr); }
+  .stat-value { font-size: 22px; }
+  .tabs { flex-wrap: wrap; }
+  .todo-desc { display: none; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats Row -->
+<div class="stats-row">
+  <div class="stat-card stat-total">
+    <span class="stat-label">Total</span>
+    <span class="stat-value">{{ total }}</span>
+  </div>
+  <div class="stat-card stat-pending">
+    <span class="stat-label">Pending</span>
+    <span class="stat-value">{{ pending_count }}</span>
+  </div>
+  <div class="stat-card stat-done">
+    <span class="stat-label">Done</span>
+    <span class="stat-value">{{ completed_count }}</span>
+  </div>
+</div>
+
+<!-- Progress Bar -->
+{% if total > 0 %}
+<div class="progress-wrap">
+  <div class="progress-header">
+    <span class="progress-label"><i class="fa-solid fa-bolt"></i> Overall Progress</span>
+    <span class="progress-pct">{{ completion_pct }}%</span>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" style="width: {{ completion_pct }}%;"></div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Toolbar: Search + Priority Filter -->
+<form method="get" id="filter-form">
+  <input type="hidden" name="status" value="{{ status }}">
+  <div class="toolbar">
+    <div class="search-wrap">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" name="q" value="{{ q }}" placeholder="Search tasks…" class="form-input"
+             id="search-input" onchange="this.form.submit()">
+    </div>
+    <select name="priority" class="form-input priority-select" onchange="this.form.submit()">
+      <option value="">All Priorities</option>
+      <option value="high"   {% if priority_filter == 'high'   %}selected{% endif %}>🔴 High</option>
+      <option value="medium" {% if priority_filter == 'medium' %}selected{% endif %}>🟡 Medium</option>
+      <option value="low"    {% if priority_filter == 'low'    %}selected{% endif %}>🟢 Low</option>
+    </select>
+  </div>
+</form>
+
+<!-- Filter Tabs -->
+<div class="tabs">
+  <a href="?status=all{% if q %}&q={{ q }}{% endif %}"
+     class="tab {% if status == 'all' %}active{% endif %}" id="tab-all">
+    <i class="fa-solid fa-list"></i> All <span class="tab-count">{{ total }}</span>
+  </a>
+  <a href="?status=active{% if q %}&q={{ q }}{% endif %}"
+     class="tab {% if status == 'active' %}active{% endif %}" id="tab-active">
+    <i class="fa-solid fa-clock"></i> Active <span class="tab-count">{{ pending_count }}</span>
+  </a>
+  <a href="?status=completed{% if q %}&q={{ q }}{% endif %}"
+     class="tab {% if status == 'completed' %}active{% endif %}" id="tab-completed">
+    <i class="fa-solid fa-check-double"></i> Done <span class="tab-count">{{ completed_count }}</span>
+  </a>
+</div>
+
+<!-- Task List -->
+<div class="todo-list">
+  {% if todos %}
+    {% for todo in todos %}
+    <div class="todo-item {% if todo.completed %}is-done{% endif %}">
+
+      <!-- Toggle -->
+      <form method="post" action="{% url 'todo_toggle' todo.id %}" class="toggle-form">
+        {% csrf_token %}
+        <button type="submit" class="toggle-btn" title="Mark as {% if todo.completed %}pending{% else %}complete{% endif %}">
+          <i class="fa-solid fa-check"></i>
+        </button>
+      </form>
+
+      <!-- Content -->
+      <div class="todo-content">
+        <div class="todo-title">{{ todo.title }}</div>
+        <div class="todo-meta">
+          <span class="badge badge-{{ todo.priority }}">
+            {% if todo.priority == 'high' %}🔴{% elif todo.priority == 'medium' %}🟡{% else %}🟢{% endif %}
+            {{ todo.get_priority_display }}
+          </span>
+          {% if todo.description %}
+            <span class="todo-desc">{{ todo.description }}</span>
+          {% endif %}
+          {% if todo.due_date %}
+            <span class="due-date">
+              <i class="fa-regular fa-calendar"></i> {{ todo.due_date }}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="todo-actions">
+        <a href="{% url 'todo_edit' todo.id %}" class="btn btn-ghost btn-icon"
+           title="Edit task" id="edit-{{ todo.id }}">
+          <i class="fa-solid fa-pen"></i>
+        </a>
+        <a href="{% url 'todo_delete' todo.id %}" class="btn btn-danger btn-icon"
+           title="Delete task" id="delete-{{ todo.id }}">
+          <i class="fa-solid fa-trash"></i>
+        </a>
+      </div>
+
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <div class="empty-state card">
+      <div class="empty-icon">📭</div>
+      <h3>{% if q %}No results for "{{ q }}"{% else %}No tasks here{% endif %}</h3>
+      <p>{% if q %}Try a different search term.{% else %}Add a new task to get started!{% endif %}</p>
+      {% if not q %}
+        <a href="{% url 'todo_create' %}" class="btn btn-primary" id="empty-add-btn">
+          <i class="fa-solid fa-plus"></i> Create First Task
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
